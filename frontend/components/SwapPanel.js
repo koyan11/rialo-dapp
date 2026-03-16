@@ -1,115 +1,132 @@
 import { useState, useEffect } from "react";
-import { useAccount, useWriteContract, useReadContract, useBalance } from "wagmi";
-import { parseEther, formatEther } from "viem";
-import { CONTRACT_ADDRESSES, SWAP_ABI, ERC20_ABI, TOKENS, ETH_ADDRESS } from "../utils/contracts";
+import { useAccount } from "wagmi";
 import toast from "react-hot-toast";
+
+const SWAP_ADDRESS = "0x6Df06B7bAd7ADAc58D83A4B7341c5Cd8B8675Fd3";
+const ETH_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+const TOKENS = [
+  { symbol: "ETH", name: "Ethereum", address: ETH_ADDRESS, icon: "Ξ" },
+  { symbol: "RLO", name: "Rialo Token", address: "0xD36af4490FD77F26E5da7Ec9D1BAF9cf98EbE9f2", icon: "R" },
+  { symbol: "BTC", name: "Bitcoin Test", address: "0x2aCdF5D229831684C58DA42308EDC835dEa9Ee35", icon: "₿" },
+  { symbol: "USDT", name: "Tether Test", address: "0xCE20D75C44146696ef4cBCF93C76DA711F91f84c", icon: "₮" },
+  { symbol: "USDC", name: "USD Coin Test", address: "0xDEE5806DF86b9F8293e8c89f969B1b10d7c460A7", icon: "$" },
+];
+
+function pad(hex, len=64) { return hex.replace('0x','').padStart(len,'0'); }
+function selector(sig) {
+  // precomputed selectors
+  const sels = {
+    'getAmountOut(address,address,uint256)': '0x4aa4a4b8',
+    'swapETHToToken(address,uint256)': '0x8b8f8c3f',
+    'swapTokenToETH(address,uint256,uint256)': '0x703e9e89',
+    'swapTokenToToken(address,address,uint256,uint256)': '0x33f5033f',
+    'approve(address,uint256)': '0x095ea7b3',
+  };
+  return sels[sig] || '0x00000000';
+}
 
 export default function SwapPanel() {
   const { address } = useAccount();
-  const [fromToken, setFromToken] = useState(TOKENS[0]); // ETH
-  const [toToken, setToToken] = useState(TOKENS[1]);     // RLO
+  const [fromToken, setFromToken] = useState(TOKENS[0]);
+  const [toToken, setToToken] = useState(TOKENS[1]);
   const [amountIn, setAmountIn] = useState("");
   const [amountOut, setAmountOut] = useState("");
-  const { writeContractAsync } = useWriteContract();
-
-  const amountInBig = amountIn && !isNaN(amountIn) ? parseEther(amountIn) : 0n;
-
-  const { data: quote } = useReadContract({
-    address: CONTRACT_ADDRESSES.SWAP,
-    abi: SWAP_ABI,
-    functionName: "getAmountOut",
-    args: [fromToken.address, toToken.address, amountInBig],
-    query: { enabled: amountInBig > 0n && fromToken.address !== toToken.address },
-  });
+  const [isPending, setIsPending] = useState(false);
 
   useEffect(() => {
-    if (quote) setAmountOut(parseFloat(formatEther(quote[0])).toFixed(6));
-    else setAmountOut("");
-  }, [quote]);
+    if (!amountIn || isNaN(amountIn) || parseFloat(amountIn) <= 0) { setAmountOut(""); return; }
+    getQuote();
+  }, [amountIn, fromToken, toToken]);
 
-  const flip = () => {
-    const tmp = fromToken;
-    setFromToken(toToken);
-    setToToken(tmp);
-    setAmountIn("");
-    setAmountOut("");
+  const getQuote = async () => {
+    if (!window.ethereum) return;
+    try {
+      const amtBig = BigInt(Math.floor(parseFloat(amountIn) * 1e18));
+      const data = '0x4aa4a4b8' + pad(fromToken.address) + pad(toToken.address) + pad(amtBig.toString(16));
+      const result = await window.ethereum.request({ method: 'eth_call', params: [{ to: SWAP_ADDRESS, data }, 'latest'] });
+      if (result && result !== '0x') {
+        const out = BigInt('0x' + result.slice(2, 66));
+        setAmountOut((Number(out) / 1e18).toFixed(6));
+      }
+    } catch(e) { console.error('quote error', e); setAmountOut(""); }
+  };
+
+  const sendTx = async (to, data, value='0x0') => {
+    const txHash = await window.ethereum.request({
+      method: 'eth_sendTransaction',
+      params: [{ from: address, to, data, gas: '0x493E0', value }],
+    });
+    toast.success('Transaction sent!');
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const receipt = await window.ethereum.request({ method: 'eth_getTransactionReceipt', params: [txHash] });
+      if (receipt) return receipt.status === '0x1';
+    }
+    return false;
   };
 
   const handleSwap = async () => {
-    if (!address || !amountIn) return;
-    const minOut = quote ? (quote[0] * 95n) / 100n : 0n; // 5% slippage
+    if (!address || !amountIn || !amountOut) return;
     try {
+      setIsPending(true);
+      const amtBig = BigInt(Math.floor(parseFloat(amountIn) * 1e18));
+      const minOut = BigInt(Math.floor(parseFloat(amountOut) * 0.95 * 1e18));
+      const amtHex = '0x' + amtBig.toString(16);
+
       if (fromToken.address === ETH_ADDRESS) {
-        await writeContractAsync({ address: CONTRACT_ADDRESSES.SWAP, abi: SWAP_ABI, functionName: "swapETHToToken", args: [toToken.address, minOut], value: amountInBig });
+        const data = '0x8b8f8c3f' + pad(toToken.address) + pad(minOut.toString(16));
+        await sendTx(SWAP_ADDRESS, data, amtHex);
       } else if (toToken.address === ETH_ADDRESS) {
-        await writeContractAsync({ address: fromToken.address, abi: ERC20_ABI, functionName: "approve", args: [CONTRACT_ADDRESSES.SWAP, amountInBig] });
-        await writeContractAsync({ address: CONTRACT_ADDRESSES.SWAP, abi: SWAP_ABI, functionName: "swapTokenToETH", args: [fromToken.address, amountInBig, minOut] });
+        const appData = '0x095ea7b3' + pad(SWAP_ADDRESS) + pad(amtBig.toString(16));
+        await sendTx(fromToken.address, appData);
+        const data = '0x703e9e89' + pad(fromToken.address) + pad(amtBig.toString(16)) + pad(minOut.toString(16));
+        await sendTx(SWAP_ADDRESS, data);
       } else {
-        await writeContractAsync({ address: fromToken.address, abi: ERC20_ABI, functionName: "approve", args: [CONTRACT_ADDRESSES.SWAP, amountInBig] });
-        await writeContractAsync({ address: CONTRACT_ADDRESSES.SWAP, abi: SWAP_ABI, functionName: "swapTokenToToken", args: [fromToken.address, toToken.address, amountInBig, minOut] });
+        const appData = '0x095ea7b3' + pad(SWAP_ADDRESS) + pad(amtBig.toString(16));
+        await sendTx(fromToken.address, appData);
+        const data = '0x33f5033f' + pad(fromToken.address) + pad(toToken.address) + pad(amtBig.toString(16)) + pad(minOut.toString(16));
+        await sendTx(SWAP_ADDRESS, data);
       }
-      toast.success(`Swapped ${amountIn} ${fromToken.symbol} → ${amountOut} ${toToken.symbol}`);
+      toast.success('Swap successful!');
       setAmountIn(""); setAmountOut("");
-    } catch (e) { toast.error(e.shortMessage || "Swap failed"); }
+    } catch(e) { console.error(e); toast.error(e.message || 'Swap failed'); }
+    finally { setIsPending(false); }
   };
 
-  const TokenSelect = ({ value, onChange, exclude }) => (
-    <select
-      value={value.symbol}
-      onChange={(e) => onChange(TOKENS.find((t) => t.symbol === e.target.value))}
-      className="input-field w-auto text-sm font-semibold"
-    >
-      {TOKENS.filter((t) => t.symbol !== exclude?.symbol).map((t) => (
-        <option key={t.symbol} value={t.symbol}>{t.icon} {t.symbol}</option>
-      ))}
-    </select>
-  );
+  const flip = () => { const t = fromToken; setFromToken(toToken); setToToken(t); setAmountIn(""); setAmountOut(""); };
 
   return (
     <div className="glass p-6 max-w-md mx-auto">
       <h2 className="text-xl font-bold mb-6">Swap Tokens</h2>
-
-      {/* From */}
       <div className="bg-[var(--bg)] rounded-xl p-4 mb-2">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm text-[var(--text-muted)]">From</span>
-          <TokenSelect value={fromToken} onChange={setFromToken} exclude={toToken} />
+          <select value={fromToken.symbol} onChange={e => setFromToken(TOKENS.find(t => t.symbol === e.target.value))} className="input-field w-auto text-sm font-semibold">
+            {TOKENS.filter(t => t.symbol !== toToken.symbol).map(t => <option key={t.symbol} value={t.symbol}>{t.icon} {t.symbol}</option>)}
+          </select>
         </div>
-        <input
-          className="w-full bg-transparent text-2xl font-bold outline-none"
-          placeholder="0.0"
-          value={amountIn}
-          onChange={(e) => setAmountIn(e.target.value)}
-          type="number"
-          min="0"
-        />
+        <input className="w-full bg-transparent text-2xl font-bold outline-none" placeholder="0.0" value={amountIn} onChange={e => setAmountIn(e.target.value)} type="number" min="0" />
       </div>
-
-      {/* Flip button */}
       <div className="flex justify-center my-2">
-        <button onClick={flip} className="w-10 h-10 rounded-xl border border-[var(--border)] hover:border-accent hover:bg-accent/10 flex items-center justify-center transition-all">
-          ⇅
-        </button>
+        <button onClick={flip} className="w-10 h-10 rounded-xl border border-[var(--border)] hover:border-accent flex items-center justify-center">⇅</button>
       </div>
-
-      {/* To */}
       <div className="bg-[var(--bg)] rounded-xl p-4 mb-6">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm text-[var(--text-muted)]">To</span>
-          <TokenSelect value={toToken} onChange={setToToken} exclude={fromToken} />
+          <select value={toToken.symbol} onChange={e => setToToken(TOKENS.find(t => t.symbol === e.target.value))} className="input-field w-auto text-sm font-semibold">
+            {TOKENS.filter(t => t.symbol !== fromToken.symbol).map(t => <option key={t.symbol} value={t.symbol}>{t.icon} {t.symbol}</option>)}
+          </select>
         </div>
         <div className="text-2xl font-bold text-accent">{amountOut || "0.0"}</div>
       </div>
-
-      {/* Rate */}
       {amountIn && amountOut && (
         <div className="text-xs text-[var(--text-muted)] text-center mb-4">
-          1 {fromToken.symbol} ≈ {amountIn > 0 ? (parseFloat(amountOut) / parseFloat(amountIn)).toFixed(4) : "—"} {toToken.symbol} • 0.3% fee
+          1 {fromToken.symbol} ≈ {(parseFloat(amountOut)/parseFloat(amountIn)).toFixed(4)} {toToken.symbol} • 0.3% fee
         </div>
       )}
-
-      <button className="btn-accent w-full text-base" onClick={handleSwap} disabled={!amountIn || !address || !quote}>
-        {!address ? "Connect Wallet" : !amountIn ? "Enter Amount" : "Swap"}
+      <button className="btn-accent w-full text-base" onClick={handleSwap} disabled={!amountIn || !address || !amountOut || isPending}>
+        {!address ? "Connect Wallet" : isPending ? "Swapping..." : !amountIn ? "Enter Amount" : "Swap"}
       </button>
     </div>
   );
