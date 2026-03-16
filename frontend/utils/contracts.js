@@ -9,7 +9,7 @@ export const CONTRACT_ADDRESSES = {
   SWAP: "0x6Df06B7bAd7ADAc58D83A4B7341c5Cd8B8675Fd3",
 };
 
-export const ETH_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeeeE";
+export const ETH_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 // ─── ABIs ────────────────────────────────────────────────────────────────────
 export const ERC20_ABI = [
