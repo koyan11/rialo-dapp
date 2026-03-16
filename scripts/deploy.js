@@ -52,9 +52,9 @@ async function main() {
   console.log("   Staking pools configured.");
 
   // Deposit initial rewards (1M RLO)
-  const rewardAmount = ethers.parseEther("1000000");
-  await rlo.approve(await staking.getAddress(), rewardAmount);
-  await staking.depositRewards(rewardAmount);
+  const rewardAmount = ethers.parseEther("100");
+  // await rlo.approve(await staking.getAddress(), rewardAmount);
+  // await staking.depositRewards(rewardAmount);
   console.log("   Staking rewards deposited.");
 
   // ─── Deploy Swap ─────────────────────────────────────────────────────────────
