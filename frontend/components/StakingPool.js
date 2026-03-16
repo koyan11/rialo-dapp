@@ -16,7 +16,7 @@ export default function StakingPool({ pool }) {
     abi: STAKING_ABI,
     functionName: "userInfo",
     args: [BigInt(pool.pid), address || "0x0000000000000000000000000000000000000000"],
-    enabled: !!address,
+    query: { enabled: !!address },
   });
 
   const { data: pendingReward } = useReadContract({

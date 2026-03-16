@@ -19,7 +19,7 @@ export default function SwapPanel() {
     abi: SWAP_ABI,
     functionName: "getAmountOut",
     args: [fromToken.address, toToken.address, amountInBig],
-    enabled: amountInBig > 0n && fromToken.address !== toToken.address,
+    query: { enabled: amountInBig > 0n && fromToken.address !== toToken.address },
   });
 
   useEffect(() => {
