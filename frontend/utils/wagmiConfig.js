@@ -3,7 +3,7 @@ import { sepolia } from "wagmi/chains";
 
 export const config = getDefaultConfig({
   appName: "Rialo DApp",
-  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "YOUR_PROJECT_ID",
+  projectId: "f99404a1da1d721c2d3d4f303b305cea",
   chains: [sepolia],
   ssr: true,
 });
