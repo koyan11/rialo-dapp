@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useAccount } from "wagmi";
 import toast from "react-hot-toast";
 
-const RLO_ADDRESS = "0x4a4946A86e8C02766639c1A0578bBdd5ae8fC046";
+const RLO_ADDRESS = "0xD36af4490FD77F26E5da7Ec9D1BAF9cf98EbE9f2";
 const CLAIM_SELECTOR = "0x4c4f4ba0";
 const LAST_CLAIM_SELECTOR = "0x1a7db3b5";
 const BALANCE_SELECTOR = "0x70a08231";
