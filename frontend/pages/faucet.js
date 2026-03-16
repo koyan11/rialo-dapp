@@ -3,6 +3,10 @@ import { useAccount } from "wagmi";
 import toast from "react-hot-toast";
 
 const RLO_ADDRESS = "0x4a4946A86e8C02766639c1A0578bBdd5ae8fC046";
+const CLAIM_SELECTOR = "0x4c4f4ba0";
+const LAST_CLAIM_SELECTOR = "0x1a7db3b5";
+const BALANCE_SELECTOR = "0x70a08231";
+const COOLDOWN = 86400;
 
 function Countdown({ target }) {
   const [remaining, setRemaining] = useState(0);
@@ -37,40 +41,49 @@ export default function Faucet() {
   const fetchData = async () => {
     if (!address || !window.ethereum) return;
     try {
-      const balSig = "0x70a08231" + address.slice(2).padStart(64, "0");
-      const balResult = await window.ethereum.request({ method: "eth_call", params: [{ to: RLO_ADDRESS, data: balSig }, "latest"] });
-      if (balResult && balResult !== "0x") { const bal = Number(BigInt(balResult)) / 1e18; setRloBalance(bal.toLocaleString()); }
-      const claimSig = "0x1a7db3b5" + address.slice(2).padStart(64, "0");
-      const claimResult = await window.ethereum.request({ method: "eth_call", params: [{ to: RLO_ADDRESS, data: claimSig }, "latest"] });
-      if (claimResult && claimResult !== "0x") { setNextClaim(Number(BigInt(claimResult))); }
-    } catch (e) { console.error(e); }
+      const balData = BALANCE_SELECTOR + address.slice(2).padStart(64, "0");
+      const balResult = await window.ethereum.request({ method: "eth_call", params: [{ to: RLO_ADDRESS, data: balData }, "latest"] });
+      if (balResult && balResult !== "0x") {
+        const bal = Number(BigInt(balResult)) / 1e18;
+        setRloBalance(bal.toLocaleString());
+      }
+      const claimData = LAST_CLAIM_SELECTOR + address.slice(2).padStart(64, "0");
+      const claimResult = await window.ethereum.request({ method: "eth_call", params: [{ to: RLO_ADDRESS, data: claimData }, "latest"] });
+      if (claimResult && claimResult !== "0x") {
+        const lastClaim = Number(BigInt(claimResult));
+        setNextClaim(lastClaim > 0 ? lastClaim + COOLDOWN : 0);
+      }
+    } catch (e) { console.error("fetchData error:", e); }
   };
 
   useEffect(() => { if (isConnected && address) fetchData(); }, [isConnected, address]);
 
-  const canClaim = !nextClaim || nextClaim === 0;
+  const canClaim = !nextClaim || Date.now() / 1000 >= nextClaim;
 
   const handleClaim = async () => {
     if (!isConnected) return toast.error("Connect your wallet first");
     if (!window.ethereum) return toast.error("MetaMask not found");
+    if (!canClaim) return toast.error("Cooldown not finished yet");
     try {
       setIsPending(true);
       const txHash = await window.ethereum.request({
         method: "eth_sendTransaction",
-        params: [{ from: address, to: RLO_ADDRESS, data: "0x3501d34d", gas: "0x186A0" }],
+        params: [{ from: address, to: RLO_ADDRESS, data: CLAIM_SELECTOR, gas: "0x30D40" }],
       });
-      toast.success("Transaction sent! Waiting for confirmation...");
+      toast.success("Transaction sent! Waiting...");
       for (let i = 0; i < 30; i++) {
         await new Promise(r => setTimeout(r, 2000));
         const receipt = await window.ethereum.request({ method: "eth_getTransactionReceipt", params: [txHash] });
         if (receipt) {
           if (receipt.status === "0x1") { toast.success("1,000 RLO claimed successfully!"); fetchData(); }
-          else { toast.error("Transaction failed"); }
+          else { toast.error("Transaction failed — check Etherscan for details"); }
           break;
         }
       }
-    } catch (e) { console.error(e); toast.error(e.message || "Claim failed"); }
-    finally { setIsPending(false); }
+    } catch (e) {
+      console.error("claim error:", e);
+      toast.error(e.message || "Claim failed");
+    } finally { setIsPending(false); }
   };
 
   return (
