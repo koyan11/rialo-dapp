@@ -20,10 +20,10 @@ export default function StakingPool({ pool }) {
     try {
       const pidHex = pad(pool.pid);
       const addrHex = pad(address);
-      const userInfoSel = '0x1959a002';
+      const userInfoSel = '0x93f1a40b';
       const r1 = await window.ethereum.request({ method: 'eth_call', params: [{ to: STAKING_ADDRESS, data: userInfoSel + pidHex + addrHex }, 'latest'] });
       if (r1 && r1 !== '0x' && r1.length >= 66) { setStakedAmount((Number(BigInt('0x' + r1.slice(2,66))) / 1e18).toFixed(4)); }
-      const pendingSel = '0x90b43b4e';
+      const pendingSel = '0x1526fe27';
       const r2 = await window.ethereum.request({ method: 'eth_call', params: [{ to: STAKING_ADDRESS, data: pendingSel + pidHex + addrHex }, 'latest'] });
       if (r2 && r2 !== '0x') { setReward((Number(BigInt(r2)) / 1e18).toFixed(6)); }
     } catch(e) { console.error('fetchData error', e); }
@@ -51,7 +51,7 @@ export default function StakingPool({ pool }) {
       const amt = BigInt(Math.floor(parseFloat(stakeAmount) * 1e18));
       const appData = '0x095ea7b3' + pad(STAKING_ADDRESS) + pad(amt);
       await sendTx(pool.address, appData);
-      const stakeData = '0x1e9a6950' + pad(pool.pid) + pad(amt);
+      const stakeData = '0xe2bbb158' + pad(pool.pid) + pad(amt);
       const ok = await sendTx(STAKING_ADDRESS, stakeData);
       if (ok) { toast.success('Staked ' + stakeAmount + ' ' + pool.symbol + '!'); setStakeAmount(""); fetchData(); }
       else toast.error('Staking failed');
@@ -64,7 +64,7 @@ export default function StakingPool({ pool }) {
     try {
       setIsPending(true);
       const amt = BigInt(Math.floor(parseFloat(withdrawAmount) * 1e18));
-      const data = '0x2e1a7d4d' + pad(pool.pid) + pad(amt);
+      const data = '0x441a3e70' + pad(pool.pid) + pad(amt);
       const ok = await sendTx(STAKING_ADDRESS, data);
       if (ok) { toast.success('Withdrawn!'); setWithdrawAmount(""); fetchData(); }
       else toast.error('Withdraw failed');
@@ -76,7 +76,7 @@ export default function StakingPool({ pool }) {
     if (!address) return;
     try {
       setIsPending(true);
-      const data = '0x0a428523' + pad(pool.pid);
+      const data = '0x0ad58d2f' + pad(pool.pid);
       const ok = await sendTx(STAKING_ADDRESS, data);
       if (ok) { toast.success('Rewards claimed!'); fetchData(); }
       else toast.error('Claim failed');

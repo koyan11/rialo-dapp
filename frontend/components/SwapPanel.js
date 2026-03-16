@@ -18,9 +18,9 @@ function selector(sig) {
   // precomputed selectors
   const sels = {
     'getAmountOut(address,address,uint256)': '0x4aa4a4b8',
-    'swapETHToToken(address,uint256)': '0x8b8f8c3f',
-    'swapTokenToETH(address,uint256,uint256)': '0x703e9e89',
-    'swapTokenToToken(address,address,uint256,uint256)': '0x33f5033f',
+    'swapETHToToken(address,uint256)': '0x5c11d795',
+    'swapTokenToETH(address,uint256,uint256)': '0x18cbafe5',
+    'swapTokenToToken(address,address,uint256,uint256)': '0x38ed1739',
     'approve(address,uint256)': '0x095ea7b3',
   };
   return sels[sig] || '0x00000000';
@@ -75,17 +75,17 @@ export default function SwapPanel() {
       const amtHex = '0x' + amtBig.toString(16);
 
       if (fromToken.address === ETH_ADDRESS) {
-        const data = '0x8b8f8c3f' + pad(toToken.address) + pad(minOut.toString(16));
+        const data = '0x5c11d795' + pad(toToken.address) + pad(minOut.toString(16));
         await sendTx(SWAP_ADDRESS, data, amtHex);
       } else if (toToken.address === ETH_ADDRESS) {
         const appData = '0x095ea7b3' + pad(SWAP_ADDRESS) + pad(amtBig.toString(16));
         await sendTx(fromToken.address, appData);
-        const data = '0x703e9e89' + pad(fromToken.address) + pad(amtBig.toString(16)) + pad(minOut.toString(16));
+        const data = '0x18cbafe5' + pad(fromToken.address) + pad(amtBig.toString(16)) + pad(minOut.toString(16));
         await sendTx(SWAP_ADDRESS, data);
       } else {
         const appData = '0x095ea7b3' + pad(SWAP_ADDRESS) + pad(amtBig.toString(16));
         await sendTx(fromToken.address, appData);
-        const data = '0x33f5033f' + pad(fromToken.address) + pad(toToken.address) + pad(amtBig.toString(16)) + pad(minOut.toString(16));
+        const data = '0x38ed1739' + pad(fromToken.address) + pad(toToken.address) + pad(amtBig.toString(16)) + pad(minOut.toString(16));
         await sendTx(SWAP_ADDRESS, data);
       }
       toast.success('Swap successful!');
