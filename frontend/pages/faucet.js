@@ -57,7 +57,7 @@ export default function Faucet() {
       setIsPending(true);
       const txHash = await window.ethereum.request({
         method: "eth_sendTransaction",
-        params: [{ from: address, to: RLO_ADDRESS, data: "0x4c4f4ba0", gas: "0x186A0" }],
+        params: [{ from: address, to: RLO_ADDRESS, data: "0x3501d34d", gas: "0x186A0" }],
       });
       toast.success("Transaction sent! Waiting for confirmation...");
       for (let i = 0; i < 30; i++) {
